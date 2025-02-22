@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@media print {
+  @page {
+    margin: 0.5in;
+  }
+
+  /* Hide everything by default */
+  /*body > div:not(.print-page) {
+    display: none !important;
+  }*/
+
+  /* Show print content */
+  .print-page {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  /* Hide screen-only elements */
+  .no-print,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Ensure dark text */
+  * {
+    color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color: black !important;
+    text-shadow: none !important;
+  }
+}
