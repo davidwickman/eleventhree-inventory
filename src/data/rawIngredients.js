@@ -10,6 +10,11 @@ export const RAW_INGREDIENTS = {
     category: "Flour",
     unit: "kg"
   },
+  semolina: {
+    name: "Semolina",
+    category: "Flour",
+    unit: "kg"
+  },
   sanMarzanoTomatoes: {
     name: "San Marzano Tomato Cans",
     category: "Canned Goods",
@@ -30,6 +35,11 @@ export const RAW_INGREDIENTS = {
     category: "Oil",
     unit: "bottles"
   },
+  hotHoney: { 
+    name: "Mike's Hot Honey",
+    category: 'Sauce',
+    unit: "containers"
+   },
   basilBags: {
     name: "Basil Bags",
     category: "Herbs",
@@ -49,6 +59,11 @@ export const RAW_INGREDIENTS = {
     name: "Garlic Container",
     category: "Aromatics",
     unit: "containers"
+  },
+  prosciutto: {
+    name: "Prosciutto",
+    category: "Meat",
+    unit: "bags"
   },
   pepperoniBags: {
     name: "Pepperoni Bags",
@@ -70,6 +85,11 @@ export const RAW_INGREDIENTS = {
     category: "Cheese",
     unit: "containers"
   },
+  milk: {
+    name: "Milk",
+    category: "Cheese",
+    unit: "containers"
+  },
   buratteContainers: {
     name: "Buratta",
     category: "Cheese",
@@ -79,6 +99,16 @@ export const RAW_INGREDIENTS = {
     name: "Mushroom Box",
     category: "Produce",
     unit: "boxes"
+  },
+  redOnion: {
+    name: "Red Onions",
+    category: "Produce",
+    unit: "unit"
+  },
+  jalapeno: {
+    name: "Jalapeno",
+    category: "Produce",
+    unit: "unit"
   },
   lemons: {
     name: "Lemons",

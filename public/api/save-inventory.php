@@ -29,7 +29,12 @@ if (json_last_error() !== JSON_ERROR_NONE) {
 }
 
 // Set file paths based on inventory type
-$jsonFile = $inventoryType === 'raw' ? '../data/raw-inventory.json' : '../data/prepped-inventory.json';
+$jsonFile = match($inventoryType) {
+    'raw' => '../data/raw-inventory.json',
+    'paper' => '../data/paper-inventory.json',
+    default => '../data/prepped-inventory.json',
+};
+
 $backupDir = '../data/backups/' . $inventoryType;
 
 // Create directories if they don't exist

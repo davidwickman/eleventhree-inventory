@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { loadInventoryFromJSON, saveInventoryToJSON } from './utils/jsonStorage';
 import { INGREDIENTS } from './data/ingredients';
 import { RAW_INGREDIENTS } from './data/rawIngredients';
+import { PAPER_GOODS } from './data/paperGoods';
 import InventoryList from './components/InventoryList';
 import RawInventoryList from './components/RawInventoryList';
 import PrepList from './components/PrepList';
 import ReorderList from './components/ReorderList';
+import PaperGoodsList from './components/PaperGoodsList';
 import PrintPrep from './components/PrintPrep';
 import PrintReorder from './components/PrintReorder';
 import {
@@ -113,6 +115,19 @@ const App = () => {
 
   const handleClear = (type) => {
     const actions = {
+      'paper-goods': {
+        title: 'Clear Paper Goods',
+        description: 'Are you sure you want to clear all paper goods counts? This action cannot be undone.',
+        action: () => {
+          setInventory(prev => 
+            Object.keys(prev).reduce((acc, key) => ({
+              ...acc,
+              [key]: PAPER_GOODS[key] ? { ...prev[key], count: 0 } : prev[key]
+            }), {})
+          );
+          showModal('Cleared', 'Paper goods counts have been cleared', 'success');
+        }
+      },
       'prepped-inventory': {
         title: 'Clear Prepped Inventory',
         description: 'Are you sure you want to clear all prepped inventory counts? This action cannot be undone.',
@@ -504,6 +519,17 @@ const App = () => {
                 </button>
               </>
             )}
+
+            {activeTab === 'paper-goods' && (
+              <>
+                <button 
+                  onClick={() => handleClear('paper-goods')}
+                  className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                >
+                  Clear Counts
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -544,6 +570,15 @@ const App = () => {
           >
             Reorder List
           </button>
+          <button
+            onClick={() => setActiveTab('paper-goods')}
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-t font-medium
+              ${activeTab === 'paper-goods'
+                ? 'bg-white text-green-700 border-t border-x' 
+                : 'bg-gray-100 text-gray-600'}`}
+          >
+            Paper Goods
+          </button>
         </div>
 
         <div className="bg-white rounded-lg shadow p-4">
@@ -563,11 +598,16 @@ const App = () => {
               togglePrep={togglePrep}
               updatePrepAmount={updatePrepAmount}
             />
-          ) : (
+          ) : activeTab === 'reorder' ? (
             <ReorderList
               inventory={inventory}
               toggleReorder={toggleReorder}
               updateReorderAmount={updateReorderAmount}
+            />
+          ) : (
+            <PaperGoodsList
+              inventory={inventory}
+              updateCount={updateCount}
             />
           )}
         </div>

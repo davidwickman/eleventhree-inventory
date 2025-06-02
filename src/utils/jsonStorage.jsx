@@ -1,10 +1,12 @@
 import { INGREDIENTS } from '../data/ingredients';
 import { RAW_INGREDIENTS } from '../data/rawIngredients';
+import { PAPER_GOODS } from '../data/paperGoods';
 
 export const loadInventoryFromJSON = async () => {
   try {
     const preppedResponse = await fetch('./data/prepped-inventory.json');
     const rawResponse = await fetch('./data/raw-inventory.json');
+    const paperResponse = await fetch('./data/paper-inventory.json');
     let inventory = {};
 
     if (preppedResponse.ok) {
@@ -33,6 +35,17 @@ export const loadInventoryFromJSON = async () => {
       });
     }
 
+    if (paperResponse.ok) {
+      const paperData = await paperResponse.json();
+      Object.entries(paperData).forEach(([key, value]) => {
+        if (PAPER_GOODS[key]) {
+          inventory[key] = {
+            count: value.count || 0
+          };
+        }
+      });
+    }
+
     return inventory;
   } catch (error) {
     console.error('Error loading inventory:', error);
@@ -42,9 +55,10 @@ export const loadInventoryFromJSON = async () => {
 
 export const saveInventoryToJSON = async (inventory) => {
   try {
-    // Separate prepped and raw items
+    // Separate prepped, raw, and paper items
     const preppedItems = {};
     const rawItems = {};
+    const paperItems = {};
 
     Object.entries(inventory).forEach(([key, value]) => {
       if (RAW_INGREDIENTS[key]) {
@@ -58,6 +72,10 @@ export const saveInventoryToJSON = async (inventory) => {
           count: value.count || 0,
           needsPrep: Boolean(value.needsPrep),
           prepAmount: value.prepAmount || 0
+        };
+      } else if (PAPER_GOODS[key]) {
+        paperItems[key] = {
+          count: value.count || 0
         };
       }
     });
@@ -82,7 +100,17 @@ export const saveInventoryToJSON = async (inventory) => {
       body: JSON.stringify(rawItems)
     });
 
-    if (!preppedResponse.ok || !rawResponse.ok) {
+    // Save paper goods inventory
+    const paperResponse = await fetch('./api/save-inventory.php', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Inventory-Type': 'paper'
+      },
+      body: JSON.stringify(paperItems)
+    });
+
+    if (!preppedResponse.ok || !rawResponse.ok || !paperResponse.ok) {
       throw new Error('Failed to save inventory');
     }
   } catch (error) {
