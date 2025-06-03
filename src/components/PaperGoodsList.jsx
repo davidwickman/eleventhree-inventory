@@ -1,12 +1,15 @@
 // src/components/PaperGoodsList.jsx
 import React from 'react';
-import { PAPER_GOODS } from '../data/paperGoods';
 
 const PaperGoodsList = ({ 
   inventory, 
-  updateCount 
+  updateCount,
+  items,
+  onEditItem,
+  onDeleteItem,
+  customItems = {}
 }) => {
-  const itemsByCategory = Object.entries(PAPER_GOODS).reduce((acc, [key, item]) => {
+  const itemsByCategory = Object.entries(items).reduce((acc, [key, item]) => {
     acc[item.category] = acc[item.category] || [];
     acc[item.category].push(key);
     return acc;
@@ -23,14 +26,14 @@ const PaperGoodsList = ({
 
   return (
     <div className="space-y-6">
-      {Object.entries(itemsByCategory).map(([category, items]) => (
+      {Object.entries(itemsByCategory).map(([category, itemKeys]) => (
         <div key={category} className="border rounded-lg">
           <div className="bg-gray-100 p-2 font-bold rounded-t-lg">
             {category}
           </div>
           <div className="p-2 space-y-2">
-            {items.map((itemKey) => {
-              const item = PAPER_GOODS[itemKey];
+            {itemKeys.map((itemKey) => {
+              const item = items[itemKey];
               const currentCount = inventory[itemKey]?.count || 0;
 
               return (
@@ -38,7 +41,27 @@ const PaperGoodsList = ({
                   key={itemKey} 
                   className="flex justify-between items-center p-3 border rounded hover:bg-gray-50"
                 >
-                  <span className="font-medium">{item.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{item.name}</span>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => onEditItem(itemKey, 'paperGoods')}
+                        className="px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
+                        title="Edit item"
+                      >
+                        Edit
+                      </button>
+                      {customItems[itemKey] && (
+                        <button
+                          onClick={() => onDeleteItem(itemKey, 'paperGoods')}
+                          className="px-2 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200"
+                          title="Delete custom item"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => updateCount(itemKey, -1)}

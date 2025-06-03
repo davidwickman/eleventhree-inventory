@@ -1,13 +1,12 @@
-// components/PrintReorder.jsx
+// src/components/PrintReorder.jsx
 import React from 'react';
-import { RAW_INGREDIENTS } from '../data/rawIngredients';
 
-const PrintReorder = ({ reorderItems, onClose }) => {
+const PrintReorder = ({ reorderItems, onClose, items }) => {
   const date = new Date().toLocaleDateString();
   
   // Group items by category
   const itemsByCategory = reorderItems.reduce((acc, [key, item]) => {
-    const category = RAW_INGREDIENTS[key].category;
+    const category = items[key]?.category || 'Unknown';
     if (!acc[category]) acc[category] = [];
     acc[category].push({ key, ...item });
     return acc;
@@ -50,25 +49,25 @@ const PrintReorder = ({ reorderItems, onClose }) => {
             </p>
           ) : (
             <>
-              {Object.entries(itemsByCategory).map(([category, items]) => (
+              {Object.entries(itemsByCategory).map(([category, categoryItems]) => (
                 <div key={category} className="mb-6">
                   <h2 className="text-xl font-bold border-b-2 border-black mb-3">
                     {category}
                   </h2>
                   <div className="space-y-3">
-                    {items.map(({ key, count, reorderAmount }) => (
+                    {categoryItems.map(({ key, count, reorderAmount }) => (
                       <div key={key} className="flex items-center gap-4">
                         <div className="w-5 h-5 border-2 border-black flex-shrink-0" />
                         <div className="flex-grow">
                           <span className="font-medium">
-                            {RAW_INGREDIENTS[key].name}
+                            {items[key]?.name || key}
                           </span>
                           <span className="text-gray-600 ml-2">
-                            (Current: {count} {RAW_INGREDIENTS[key].unit})
+                            (Current: {count} {items[key]?.unit || ''})
                           </span>
                         </div>
                         <div className="font-bold flex-shrink-0">
-                          Order: {reorderAmount} {RAW_INGREDIENTS[key].unit}
+                          Order: {reorderAmount} {items[key]?.unit || ''}
                         </div>
                       </div>
                     ))}

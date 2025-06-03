@@ -1,7 +1,7 @@
+// src/components/PrintPrep.jsx
 import React from 'react';
-import { INGREDIENTS } from '../data/ingredients';
 
-const PrintPrep = ({ prepItems, onClose }) => {
+const PrintPrep = ({ prepItems, onClose, items }) => {
   const today = new Date().toLocaleDateString();
 
   const handlePrint = () => {
@@ -10,7 +10,7 @@ const PrintPrep = ({ prepItems, onClose }) => {
 
   // Group items by category
   const categorizedItems = prepItems.reduce((acc, [ing, value]) => {
-    const category = INGREDIENTS[ing].category;
+    const category = items[ing]?.category || 'Unknown';
     if (!acc[category]) acc[category] = [];
     acc[category].push({ key: ing, ...value });
     return acc;
@@ -51,15 +51,15 @@ const PrintPrep = ({ prepItems, onClose }) => {
             <p className="text-center text-gray-500">No items marked for prep</p>
           ) : (
             <>
-              {Object.entries(categorizedItems).map(([category, items]) => (
+              {Object.entries(categorizedItems).map(([category, categoryItems]) => (
                 <div key={category} className="mb-6">
                   <h2 className="text-xl font-bold border-b-2 border-black mb-3">{category}</h2>
                   <div className="space-y-3">
-                    {items.map(({ key, count, prepAmount }) => (
+                    {categoryItems.map(({ key, count, prepAmount }) => (
                       <div key={key} className="flex items-center gap-4">
                         <div className="w-5 h-5 border-2 border-black flex-shrink-0"></div>
                         <div className="flex-grow">
-                          <span className="font-medium">{INGREDIENTS[key].name}</span>
+                          <span className="font-medium">{items[key]?.name || key}</span>
                           <span className="text-gray-600 ml-2">(Current: {count})</span>
                         </div>
                         <div className="font-bold flex-shrink-0">

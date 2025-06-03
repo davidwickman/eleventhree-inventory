@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { loadInventoryFromJSON, saveInventoryToJSON } from './utils/jsonStorage';
+import { loadItemsFromJSON, saveItemsToJSON, deleteCustomItem } from './utils/itemsStorage';
 import { INGREDIENTS } from './data/ingredients';
 import { RAW_INGREDIENTS } from './data/rawIngredients';
 import { PAPER_GOODS } from './data/paperGoods';
@@ -10,6 +11,8 @@ import ReorderList from './components/ReorderList';
 import PaperGoodsList from './components/PaperGoodsList';
 import PrintPrep from './components/PrintPrep';
 import PrintReorder from './components/PrintReorder';
+import UserLogin from './components/UserLogin';
+import AddItemModal from './components/AddItemModal';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -22,13 +25,21 @@ import {
 } from './components/ui/alert-dialog';
 
 const App = () => {
+  const [currentUser, setCurrentUser] = useState(null);
   const [inventory, setInventory] = useState({});
+  const [customItems, setCustomItems] = useState({
+    ingredients: {},
+    rawIngredients: {},
+    paperGoods: {}
+  });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('prepped-inventory');
   const [modalOpen, setModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState({ title: '', message: '', type: 'info' });
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [showReorderPrintModal, setShowReorderPrintModal] = useState(false);
+  const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState({
     title: '',
@@ -37,25 +48,165 @@ const App = () => {
     variant: 'destructive'
   });
 
+  // Combined items including custom items
+  const allIngredients = { ...INGREDIENTS, ...customItems.ingredients };
+  const allRawIngredients = { ...RAW_INGREDIENTS, ...customItems.rawIngredients };
+  const allPaperGoods = { ...PAPER_GOODS, ...customItems.paperGoods };
+
   useEffect(() => {
-    loadInventoryFromJSON()
-      .then(data => {
-        setInventory(data);
-        setLoading(false);
-      });
+    // Check for existing user session
+    const savedUser = localStorage.getItem('inventoryAppUser');
+    if (savedUser) {
+      setCurrentUser(savedUser);
+    }
   }, []);
 
   useEffect(() => {
-    if (!loading) {
+    if (currentUser) {
+      Promise.all([
+        loadInventoryFromJSON(),
+        loadItemsFromJSON()
+      ]).then(([inventoryData, itemsData]) => {
+        setInventory(inventoryData);
+        setCustomItems(itemsData);
+        setLoading(false);
+      });
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!loading && currentUser) {
       saveInventoryToJSON(inventory).catch(error => {
         showModal('Error', 'Failed to save inventory', 'error');
       });
     }
-  }, [inventory, loading]);
+  }, [inventory, loading, currentUser]);
+
+  useEffect(() => {
+    if (!loading && currentUser) {
+      saveItemsToJSON(customItems).catch(error => {
+        showModal('Error', 'Failed to save custom items', 'error');
+      });
+    }
+  }, [customItems, loading, currentUser]);
+
+  const handleLogin = (username) => {
+    setCurrentUser(username);
+    localStorage.setItem('inventoryAppUser', username);
+    setLoading(true);
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('inventoryAppUser');
+    setInventory({});
+    setCustomItems({
+      ingredients: {},
+      rawIngredients: {},
+      paperGoods: {}
+    });
+  };
 
   const showModal = (title, message, type = 'info') => {
     setModalContent({ title, message, type });
     setModalOpen(true);
+  };
+
+  const handleAddItem = (itemData) => {
+    const { type, key, name, category, unit } = itemData;
+    
+    setCustomItems(prev => ({
+      ...prev,
+      [type]: {
+        ...prev[type],
+        [key]: { name, category, unit }
+      }
+    }));
+
+    showModal('Success', `${name} has been added to ${category}`, 'success');
+  };
+
+  const handleUpdateItem = (itemData) => {
+    const { oldKey, type, key, name, category, unit, isBuiltIn } = itemData;
+    
+    setCustomItems(prev => {
+      const newItems = { ...prev };
+      
+      // If editing a built-in item, we create an override in customItems
+      if (isBuiltIn) {
+        // For built-in items, we always keep the same key to maintain data integrity
+        newItems[type][oldKey] = { name, category, unit };
+      } else {
+        // For custom items, handle key changes as before
+        if (oldKey !== key && newItems[type][oldKey]) {
+          delete newItems[type][oldKey];
+        }
+        newItems[type][key] = { name, category, unit };
+      }
+      
+      return newItems;
+    });
+
+    // For custom items, handle inventory key changes
+    if (!isBuiltIn && oldKey !== key && inventory[oldKey]) {
+      setInventory(prev => {
+        const newInventory = { ...prev };
+        newInventory[key] = newInventory[oldKey];
+        delete newInventory[oldKey];
+        return newInventory;
+      });
+    }
+
+    showModal('Success', `${name} has been updated`, 'success');
+    setEditingItem(null);
+  };
+
+  const handleEditItem = (itemKey, itemType) => {
+    const itemData = allIngredients[itemKey] || allRawIngredients[itemKey] || allPaperGoods[itemKey];
+    if (itemData) {
+      setEditingItem({
+        key: itemKey,
+        name: itemData.name,
+        category: itemData.category,
+        unit: itemData.unit,
+        isBuiltIn: !customItems[itemType]?.[itemKey] // Check if it's a built-in item
+      });
+      setShowAddItemModal(true);
+    }
+  };
+
+  const handleDeleteItem = (itemKey, itemType) => {
+    const itemData = allIngredients[itemKey] || allRawIngredients[itemKey] || allPaperGoods[itemKey];
+    const isBuiltIn = !customItems[itemType]?.[itemKey];
+    
+    if (isBuiltIn) {
+      showModal('Cannot Delete', 'Built-in items cannot be deleted, but you can edit them to change their properties.', 'warning');
+      return;
+    }
+    
+    setConfirmAction({
+      title: 'Delete Custom Item',
+      description: `Are you sure you want to delete "${itemData?.name}"? This action cannot be undone and will also remove all inventory data for this item.`,
+      action: async () => {
+        try {
+          const updatedItems = await deleteCustomItem(itemKey, itemType, customItems);
+          setCustomItems(updatedItems);
+          
+          // Also remove from inventory
+          setInventory(prev => {
+            const newInventory = { ...prev };
+            delete newInventory[itemKey];
+            return newInventory;
+          });
+          
+          showModal('Success', `${itemData?.name} has been deleted`, 'success');
+        } catch (error) {
+          showModal('Error', 'Failed to delete item', 'error');
+        }
+      },
+      variant: 'destructive'
+    });
+    setConfirmOpen(true);
   };
 
   // Inventory handlers
@@ -122,7 +273,7 @@ const App = () => {
           setInventory(prev => 
             Object.keys(prev).reduce((acc, key) => ({
               ...acc,
-              [key]: PAPER_GOODS[key] ? { ...prev[key], count: 0 } : prev[key]
+              [key]: allPaperGoods[key] ? { ...prev[key], count: 0 } : prev[key]
             }), {})
           );
           showModal('Cleared', 'Paper goods counts have been cleared', 'success');
@@ -135,7 +286,7 @@ const App = () => {
           setInventory(prev => 
             Object.keys(prev).reduce((acc, key) => ({
               ...acc,
-              [key]: INGREDIENTS[key] ? { ...prev[key], count: 0 } : prev[key]
+              [key]: allIngredients[key] ? { ...prev[key], count: 0 } : prev[key]
             }), {})
           );
           showModal('Cleared', 'Prepped inventory has been cleared', 'success');
@@ -148,7 +299,7 @@ const App = () => {
           setInventory(prev => 
             Object.keys(prev).reduce((acc, key) => ({
               ...acc,
-              [key]: RAW_INGREDIENTS[key] ? { ...prev[key], count: 0 } : prev[key]
+              [key]: allRawIngredients[key] ? { ...prev[key], count: 0 } : prev[key]
             }), {})
           );
           showModal('Cleared', 'Raw inventory has been cleared', 'success');
@@ -188,7 +339,7 @@ const App = () => {
 
   const exportPreparedInventoryToCSV = () => {
     const rows = [['Item', 'Category', 'Current Count']];
-    Object.entries(INGREDIENTS).forEach(([key, value]) => {
+    Object.entries(allIngredients).forEach(([key, value]) => {
       rows.push([
         value.name,
         value.category,
@@ -208,7 +359,7 @@ const App = () => {
 
   const exportRawInventoryToCSV = () => {
     const rows = [['Item', 'Category', 'Current Count', 'Unit']];
-    Object.entries(RAW_INGREDIENTS).forEach(([key, value]) => {
+    Object.entries(allRawIngredients).forEach(([key, value]) => {
       rows.push([
         value.name,
         value.category,
@@ -239,8 +390,8 @@ const App = () => {
     const rows = [['Item', 'Category', 'Current Count', 'Prep Amount']];
     prepItems.forEach(([ing, value]) => {
       rows.push([
-        INGREDIENTS[ing].name,
-        INGREDIENTS[ing].category,
+        allIngredients[ing].name,
+        allIngredients[ing].category,
         value.count,
         value.prepAmount
       ]);
@@ -268,11 +419,11 @@ const App = () => {
     const rows = [['Item', 'Category', 'Current Count', 'Order Amount', 'Unit']];
     reorderItems.forEach(([ing, value]) => {
       rows.push([
-        RAW_INGREDIENTS[ing].name,
-        RAW_INGREDIENTS[ing].category,
+        allRawIngredients[ing].name,
+        allRawIngredients[ing].category,
         value.count,
         value.reorderAmount,
-        RAW_INGREDIENTS[ing].unit
+        allRawIngredients[ing].unit
       ]);
     });
 
@@ -313,8 +464,8 @@ const App = () => {
     const prepItems = Object.entries(inventory)
       .filter(([_, value]) => value.needsPrep)
       .map(([ing, value]) => ({
-        name: INGREDIENTS[ing].name,
-        category: INGREDIENTS[ing].category,
+        name: allIngredients[ing].name,
+        category: allIngredients[ing].category,
         amount: value.prepAmount,
         currentCount: value.count
       }));
@@ -349,10 +500,10 @@ const App = () => {
     const reorderItems = Object.entries(inventory)
       .filter(([_, value]) => value.needsReorder)
       .map(([ing, value]) => ({
-        name: RAW_INGREDIENTS[ing].name,
-        category: RAW_INGREDIENTS[ing].category,
+        name: allRawIngredients[ing].name,
+        category: allRawIngredients[ing].category,
         amount: value.reorderAmount,
-        unit: RAW_INGREDIENTS[ing].unit,
+        unit: allRawIngredients[ing].unit,
         currentCount: value.count
       }));
 
@@ -381,6 +532,11 @@ const App = () => {
       console.error('Error sending reorder list:', error);
     }
   };
+
+  // Show login screen if no user is logged in
+  if (!currentUser) {
+    return <UserLogin onLogin={handleLogin} />;
+  }
 
   if (loading) {
     return <div className="p-4 text-center">Loading inventory...</div>;
@@ -421,9 +577,35 @@ const App = () => {
           variant={confirmAction.variant}
         />
 
+        <AddItemModal
+          open={showAddItemModal}
+          onOpenChange={(open) => {
+            setShowAddItemModal(open);
+            if (!open) setEditingItem(null);
+          }}
+          onAddItem={handleAddItem}
+          onUpdateItem={handleUpdateItem}
+          editingItem={editingItem}
+          activeTab={activeTab}
+        />
+
         <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold text-green-800">Eleventhree Pizza</h1>
+          <div>
+            <h1 className="text-2xl font-bold text-green-800">Eleventhree Pizza</h1>
+            <p className="text-sm text-gray-600">Logged in as: {currentUser}</p>
+          </div>
           <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setEditingItem(null);
+                setShowAddItemModal(true);
+              }}
+              className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-2"
+            >
+              <span>+</span>
+              Add Item
+            </button>
+            
             {activeTab === 'prepped-inventory' && (
               <>
                 <button 
@@ -530,6 +712,13 @@ const App = () => {
                 </button>
               </>
             )}
+
+            <button
+              onClick={handleLogout}
+              className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+            >
+              Logout
+            </button>
           </div>
         </div>
 
@@ -586,28 +775,48 @@ const App = () => {
             <InventoryList 
               inventory={inventory}
               updateCount={updateCount}
+              items={allIngredients}
+              onEditItem={handleEditItem}
+              onDeleteItem={handleDeleteItem}
+              customItems={customItems.ingredients}
             />
           ) : activeTab === 'raw-inventory' ? (
             <RawInventoryList
               inventory={inventory}
               updateCount={updateCount}
+              items={allRawIngredients}
+              onEditItem={handleEditItem}
+              onDeleteItem={handleDeleteItem}
+              customItems={customItems.rawIngredients}
             />
           ) : activeTab === 'prep' ? (
             <PrepList
               inventory={inventory}
               togglePrep={togglePrep}
               updatePrepAmount={updatePrepAmount}
+              items={allIngredients}
+              onEditItem={handleEditItem}
+              onDeleteItem={handleDeleteItem}
+              customItems={customItems.ingredients}
             />
           ) : activeTab === 'reorder' ? (
             <ReorderList
               inventory={inventory}
               toggleReorder={toggleReorder}
               updateReorderAmount={updateReorderAmount}
+              items={allRawIngredients}
+              onEditItem={handleEditItem}
+              onDeleteItem={handleDeleteItem}
+              customItems={customItems.rawIngredients}
             />
           ) : (
             <PaperGoodsList
               inventory={inventory}
               updateCount={updateCount}
+              items={allPaperGoods}
+              onEditItem={handleEditItem}
+              onDeleteItem={handleDeleteItem}
+              customItems={customItems.paperGoods}
             />
           )}
         </div>
@@ -617,6 +826,7 @@ const App = () => {
             <PrintPrep 
               prepItems={Object.entries(inventory).filter(([_, value]) => value.needsPrep)} 
               onClose={() => setShowPrintModal(false)}
+              items={allIngredients}
             />
           </div>
         )}
@@ -626,6 +836,7 @@ const App = () => {
             <PrintReorder
               reorderItems={Object.entries(inventory).filter(([_, value]) => value.needsReorder)}
               onClose={() => setShowReorderPrintModal(false)}
+              items={allRawIngredients}
             />
           </div>
         )}

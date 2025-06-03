@@ -1,0 +1,15 @@
+# public/data/custom-items.json
+{
+  "ingredients": {},
+  "rawIngredients": {},
+  "paperGoods": {}
+}
+
+# public/data/prepped-inventory.json
+{}
+
+# public/data/raw-inventory.json
+{}
+
+# public/data/paper-inventory.json
+{}

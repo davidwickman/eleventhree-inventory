@@ -1,13 +1,16 @@
-// ReorderList.js
+// src/components/ReorderList.jsx
 import React from 'react';
-import { RAW_INGREDIENTS } from '../data/rawIngredients';
 
 const ReorderList = ({ 
   inventory, 
   toggleReorder, 
-  updateReorderAmount 
+  updateReorderAmount,
+  items,
+  onEditItem,
+  onDeleteItem,
+  customItems = {}
 }) => {
-  const itemsByCategory = Object.entries(RAW_INGREDIENTS).reduce((acc, [key, item]) => {
+  const itemsByCategory = Object.entries(items).reduce((acc, [key, item]) => {
     acc[item.category] = acc[item.category] || [];
     acc[item.category].push(key);
     return acc;
@@ -24,14 +27,14 @@ const ReorderList = ({
 
   return (
     <div className="space-y-6">
-      {Object.entries(itemsByCategory).map(([category, items]) => (
+      {Object.entries(itemsByCategory).map(([category, itemKeys]) => (
         <div key={category} className="border rounded-lg">
           <div className="bg-gray-100 p-2 font-bold rounded-t-lg">
             {category}
           </div>
           <div className="p-2 space-y-2">
-            {items.map((itemKey) => {
-              const item = RAW_INGREDIENTS[itemKey];
+            {itemKeys.map((itemKey) => {
+              const item = items[itemKey];
               const inventoryItem = inventory[itemKey] || {};
               const currentCount = inventoryItem.count || 0;
 
@@ -48,6 +51,24 @@ const ReorderList = ({
                       className="w-4 h-4"
                     />
                     <span className="font-medium">{item.name}</span>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => onEditItem(itemKey, 'rawIngredients')}
+                        className="px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
+                        title="Edit item"
+                      >
+                        Edit
+                      </button>
+                      {customItems[itemKey] && (
+                        <button
+                          onClick={() => onDeleteItem(itemKey, 'rawIngredients')}
+                          className="px-2 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200"
+                          title="Delete custom item"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
                     <span className="text-sm text-gray-500">
                       (Current: {currentCount} {item.unit})
                     </span>
@@ -114,18 +135,18 @@ const ReorderList = ({
                 <div className="flex justify-between items-center">
                   <div>
                     <span className="font-medium">
-                      {RAW_INGREDIENTS[itemKey].name}
+                      {items[itemKey]?.name}
                     </span>
                     <span className="text-sm text-gray-600 ml-2">
-                      ({RAW_INGREDIENTS[itemKey].category})
+                      ({items[itemKey]?.category})
                     </span>
                   </div>
                   <div className="flex items-center gap-4">
                     <span className="text-sm text-gray-600">
-                      Current: {item.count} {RAW_INGREDIENTS[itemKey].unit}
+                      Current: {item.count} {items[itemKey]?.unit}
                     </span>
                     <span className="font-bold text-blue-600">
-                      Order: {item.reorderAmount} {RAW_INGREDIENTS[itemKey].unit}
+                      Order: {item.reorderAmount} {items[itemKey]?.unit}
                     </span>
                   </div>
                 </div>

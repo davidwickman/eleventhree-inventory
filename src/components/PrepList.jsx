@@ -1,8 +1,8 @@
+// src/components/PrepList.jsx
 import React from 'react';
-import { INGREDIENTS } from '../data/ingredients';
 
-const PrepList = ({ inventory, togglePrep, updatePrepAmount }) => {
-  const categories = Object.entries(INGREDIENTS).reduce((acc, [key, value]) => {
+const PrepList = ({ inventory, togglePrep, updatePrepAmount, items, onEditItem, onDeleteItem, customItems = {} }) => {
+  const categories = Object.entries(items).reduce((acc, [key, value]) => {
     if (!acc[value.category]) acc[value.category] = [];
     acc[value.category].push(key);
     return acc;
@@ -27,7 +27,25 @@ const PrepList = ({ inventory, togglePrep, updatePrepAmount }) => {
                     onChange={() => togglePrep(ing)}
                     className="w-4 h-4"
                   />
-                  <span className="font-medium">{INGREDIENTS[ing].name}</span>
+                  <span className="font-medium">{items[ing].name}</span>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => onEditItem(ing, 'ingredients')}
+                      className="px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
+                      title="Edit item"
+                    >
+                      Edit
+                    </button>
+                    {customItems[ing] && (
+                      <button
+                        onClick={() => onDeleteItem(ing, 'ingredients')}
+                        className="px-2 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200"
+                        title="Delete custom item"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
                   <span className="text-sm text-gray-500">
                     (Current: {inventory[ing]?.count || 0})
                   </span>
@@ -69,9 +87,9 @@ const PrepList = ({ inventory, togglePrep, updatePrepAmount }) => {
               >
                 <div className="flex justify-between items-center">
                   <div>
-                    <span className="font-medium">{INGREDIENTS[ing].name}</span>
+                    <span className="font-medium">{items[ing]?.name}</span>
                     <span className="text-sm text-gray-600 ml-2">
-                      ({INGREDIENTS[ing].category})
+                      ({items[ing]?.category})
                     </span>
                   </div>
                   <div className="flex items-center gap-4">

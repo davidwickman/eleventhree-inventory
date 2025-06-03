@@ -1,3 +1,4 @@
+// src/utils/jsonStorage.jsx
 import { INGREDIENTS } from '../data/ingredients';
 import { RAW_INGREDIENTS } from '../data/rawIngredients';
 import { PAPER_GOODS } from '../data/paperGoods';
@@ -12,37 +13,34 @@ export const loadInventoryFromJSON = async () => {
     if (preppedResponse.ok) {
       const preppedData = await preppedResponse.json();
       Object.entries(preppedData).forEach(([key, value]) => {
-        if (INGREDIENTS[key]) {
-          inventory[key] = {
-            count: value.count || 0,
-            needsPrep: Boolean(value.needsPrep),
-            prepAmount: value.prepAmount || 0
-          };
-        }
+        // Accept any key that exists in the data - this allows for custom items
+        inventory[key] = {
+          count: value.count || 0,
+          needsPrep: Boolean(value.needsPrep),
+          prepAmount: value.prepAmount || 0
+        };
       });
     }
 
     if (rawResponse.ok) {
       const rawData = await rawResponse.json();
       Object.entries(rawData).forEach(([key, value]) => {
-        if (RAW_INGREDIENTS[key]) {
-          inventory[key] = {
-            count: value.count || 0,
-            needsReorder: Boolean(value.needsReorder),
-            reorderAmount: value.reorderAmount || 0
-          };
-        }
+        // Accept any key that exists in the data - this allows for custom items
+        inventory[key] = {
+          count: value.count || 0,
+          needsReorder: Boolean(value.needsReorder),
+          reorderAmount: value.reorderAmount || 0
+        };
       });
     }
 
     if (paperResponse.ok) {
       const paperData = await paperResponse.json();
       Object.entries(paperData).forEach(([key, value]) => {
-        if (PAPER_GOODS[key]) {
-          inventory[key] = {
-            count: value.count || 0
-          };
-        }
+        // Accept any key that exists in the data - this allows for custom items
+        inventory[key] = {
+          count: value.count || 0
+        };
       });
     }
 
@@ -55,25 +53,36 @@ export const loadInventoryFromJSON = async () => {
 
 export const saveInventoryToJSON = async (inventory) => {
   try {
+    // Load custom items to determine item types
+    let customItems = {};
+    try {
+      const customItemsResponse = await fetch('./data/custom-items.json');
+      if (customItemsResponse.ok) {
+        customItems = await customItemsResponse.json();
+      }
+    } catch (error) {
+      console.warn('Could not load custom items for categorization:', error);
+    }
+
     // Separate prepped, raw, and paper items
     const preppedItems = {};
     const rawItems = {};
     const paperItems = {};
 
     Object.entries(inventory).forEach(([key, value]) => {
-      if (RAW_INGREDIENTS[key]) {
+      if (RAW_INGREDIENTS[key] || customItems.rawIngredients?.[key]) {
         rawItems[key] = {
           count: value.count || 0,
           needsReorder: Boolean(value.needsReorder),
           reorderAmount: value.reorderAmount || 0
         };
-      } else if (INGREDIENTS[key]) {
+      } else if (INGREDIENTS[key] || customItems.ingredients?.[key]) {
         preppedItems[key] = {
           count: value.count || 0,
           needsPrep: Boolean(value.needsPrep),
           prepAmount: value.prepAmount || 0
         };
-      } else if (PAPER_GOODS[key]) {
+      } else if (PAPER_GOODS[key] || customItems.paperGoods?.[key]) {
         paperItems[key] = {
           count: value.count || 0
         };
