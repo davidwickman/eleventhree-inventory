@@ -1,48 +1,45 @@
-// src/utils/jsonStorage.jsx
+// src/utils/jsonStorage.jsx - Updated with auto-creation
 import { INGREDIENTS } from '../data/ingredients';
 import { RAW_INGREDIENTS } from '../data/rawIngredients';
 import { PAPER_GOODS } from '../data/paperGoods';
+import { addCacheBuster } from './antiCache';
+import { ensureDataFileExists } from './dataFileManager';
 
 export const loadInventoryFromJSON = async () => {
   try {
-    const preppedResponse = await fetch('./data/prepped-inventory.json');
-    const rawResponse = await fetch('./data/raw-inventory.json');
-    const paperResponse = await fetch('./data/paper-inventory.json');
+    // Ensure files exist before trying to load them
+    const [preppedData, rawData, paperData] = await Promise.all([
+      ensureDataFileExists('prepped-inventory.json', {}),
+      ensureDataFileExists('raw-inventory.json', {}),
+      ensureDataFileExists('paper-inventory.json', {})
+    ]);
+    
     let inventory = {};
 
-    if (preppedResponse.ok) {
-      const preppedData = await preppedResponse.json();
-      Object.entries(preppedData).forEach(([key, value]) => {
-        // Accept any key that exists in the data - this allows for custom items
-        inventory[key] = {
-          count: value.count || 0,
-          needsPrep: Boolean(value.needsPrep),
-          prepAmount: value.prepAmount || 0
-        };
-      });
-    }
+    // Process prepped inventory
+    Object.entries(preppedData).forEach(([key, value]) => {
+      inventory[key] = {
+        count: value.count || 0,
+        needsPrep: Boolean(value.needsPrep),
+        prepAmount: value.prepAmount || 0
+      };
+    });
 
-    if (rawResponse.ok) {
-      const rawData = await rawResponse.json();
-      Object.entries(rawData).forEach(([key, value]) => {
-        // Accept any key that exists in the data - this allows for custom items
-        inventory[key] = {
-          count: value.count || 0,
-          needsReorder: Boolean(value.needsReorder),
-          reorderAmount: value.reorderAmount || 0
-        };
-      });
-    }
+    // Process raw inventory
+    Object.entries(rawData).forEach(([key, value]) => {
+      inventory[key] = {
+        count: value.count || 0,
+        needsReorder: Boolean(value.needsReorder),
+        reorderAmount: value.reorderAmount || 0
+      };
+    });
 
-    if (paperResponse.ok) {
-      const paperData = await paperResponse.json();
-      Object.entries(paperData).forEach(([key, value]) => {
-        // Accept any key that exists in the data - this allows for custom items
-        inventory[key] = {
-          count: value.count || 0
-        };
-      });
-    }
+    // Process paper goods
+    Object.entries(paperData).forEach(([key, value]) => {
+      inventory[key] = {
+        count: value.count || 0
+      };
+    });
 
     return inventory;
   } catch (error) {
@@ -56,10 +53,11 @@ export const saveInventoryToJSON = async (inventory) => {
     // Load custom items to determine item types
     let customItems = {};
     try {
-      const customItemsResponse = await fetch('./data/custom-items.json');
-      if (customItemsResponse.ok) {
-        customItems = await customItemsResponse.json();
-      }
+      customItems = await ensureDataFileExists('custom-items.json', {
+        ingredients: {},
+        rawIngredients: {},
+        paperGoods: {}
+      });
     } catch (error) {
       console.warn('Could not load custom items for categorization:', error);
     }
@@ -94,7 +92,8 @@ export const saveInventoryToJSON = async (inventory) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Inventory-Type': 'prepped'
+        'X-Inventory-Type': 'prepped',
+        'Cache-Control': 'no-cache'
       },
       body: JSON.stringify(preppedItems)
     });
@@ -104,7 +103,8 @@ export const saveInventoryToJSON = async (inventory) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Inventory-Type': 'raw'
+        'X-Inventory-Type': 'raw',
+        'Cache-Control': 'no-cache'
       },
       body: JSON.stringify(rawItems)
     });
@@ -114,7 +114,8 @@ export const saveInventoryToJSON = async (inventory) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Inventory-Type': 'paper'
+        'X-Inventory-Type': 'paper',
+        'Cache-Control': 'no-cache'
       },
       body: JSON.stringify(paperItems)
     });

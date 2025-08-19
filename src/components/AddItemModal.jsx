@@ -9,8 +9,20 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from './ui/alert-dialog';
+import { getCategoriesForItemType, getDefaultCategoriesForType } from '../utils/categoryStorage';
 
-const AddItemModal = ({ open, onOpenChange, onAddItem, onUpdateItem, activeTab, editingItem = null }) => {
+const AddItemModal = ({ 
+  open, 
+  onOpenChange, 
+  onAddItem, 
+  onUpdateItem, 
+  activeTab, 
+  editingItem = null,
+  allIngredients,
+  allRawIngredients, 
+  allPaperGoods,
+  customCategories
+}) => {
   const [formData, setFormData] = useState({
     name: '',
     category: '',
@@ -18,6 +30,7 @@ const AddItemModal = ({ open, onOpenChange, onAddItem, onUpdateItem, activeTab, 
     key: ''
   });
   const [errors, setErrors] = useState({});
+  const [availableCategories, setAvailableCategories] = useState([]);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -55,6 +68,24 @@ const AddItemModal = ({ open, onOpenChange, onAddItem, onUpdateItem, activeTab, 
     }
   }, [formData.name, editingItem]);
 
+  // Update available categories when activeTab changes
+  useEffect(() => {
+    const updateCategories = () => {
+      if (open) {
+        const config = getItemConfig();
+        const existingCategories = getCategoriesForItemType(config.items);
+        const defaultCategories = getDefaultCategoriesForType(config.type);
+        const customCategoriesForType = customCategories[config.type] || [];
+        
+        // Combine and deduplicate categories
+        const allCategories = [...new Set([...defaultCategories, ...customCategoriesForType, ...existingCategories])].sort();
+        setAvailableCategories(allCategories);
+      }
+    };
+    
+    updateCategories();
+  }, [open, activeTab, allIngredients, allRawIngredients, allPaperGoods, customCategories]);
+
   // Get item type and categories based on active tab
   const getItemConfig = () => {
     switch (activeTab) {
@@ -63,7 +94,7 @@ const AddItemModal = ({ open, onOpenChange, onAddItem, onUpdateItem, activeTab, 
         return {
           type: 'ingredients',
           title: editingItem ? 'Edit Prepped Ingredient' : 'Add Prepped Ingredient',
-          categories: ['Base', 'Sauce', 'Cheese', 'Meat', 'Vegetable', 'Herb', 'Seasoning', 'Salad', 'Dry Goods'],
+          items: allIngredients,
           needsUnit: false
         };
       case 'raw-inventory':
@@ -71,21 +102,21 @@ const AddItemModal = ({ open, onOpenChange, onAddItem, onUpdateItem, activeTab, 
         return {
           type: 'rawIngredients',
           title: editingItem ? 'Edit Raw Ingredient' : 'Add Raw Ingredient',
-          categories: ['Flour', 'Canned Goods', 'Cheese', 'Oil', 'Sauce', 'Herbs', 'Aromatics', 'Meat', 'Produce', 'Sauces', 'Supplies'],
+          items: allRawIngredients,
           needsUnit: true
         };
       case 'paper-goods':
         return {
           type: 'paperGoods',
           title: editingItem ? 'Edit Paper Good' : 'Add Paper Good',
-          categories: ['Napkins', 'Pizza Boxes', 'To-Go Items', 'Containers', 'Service Items', 'Retail Items'],
+          items: allPaperGoods,
           needsUnit: true
         };
       default:
         return {
           type: 'ingredients',
           title: editingItem ? 'Edit Item' : 'Add Item',
-          categories: [],
+          items: {},
           needsUnit: false
         };
     }
@@ -180,11 +211,14 @@ const AddItemModal = ({ open, onOpenChange, onAddItem, onUpdateItem, activeTab, 
               className={`w-full p-2 border rounded-md ${errors.category ? 'border-red-500' : 'border-gray-300'}`}
             >
               <option value="">Select a category</option>
-              {config.categories.map(cat => (
+              {availableCategories.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
             {errors.category && <p className="text-red-500 text-xs mt-1">{errors.category}</p>}
+            <p className="text-xs text-gray-500 mt-1">
+              Don't see your category? Use "Manage Categories" to add new ones.
+            </p>
           </div>
 
           {config.needsUnit && (

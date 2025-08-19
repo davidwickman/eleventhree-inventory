@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { loadInventoryFromJSON, saveInventoryToJSON } from './utils/jsonStorage';
 import { loadItemsFromJSON, saveItemsToJSON, deleteCustomItem } from './utils/itemsStorage';
+import { loadCategoriesFromJSON, saveCategoriesToJSON } from './utils/categoriesStorage';
+import { getCategoriesForItemType, getDefaultCategoriesForType } from './utils/categoryStorage';
+import { clearAppCache, forceDataRefresh } from './utils/antiCache';
+import { initializeAllDataFiles } from './utils/dataFileManager';
 import { INGREDIENTS } from './data/ingredients';
 import { RAW_INGREDIENTS } from './data/rawIngredients';
 import { PAPER_GOODS } from './data/paperGoods';
@@ -13,6 +17,7 @@ import PrintPrep from './components/PrintPrep';
 import PrintReorder from './components/PrintReorder';
 import UserLogin from './components/UserLogin';
 import AddItemModal from './components/AddItemModal';
+import CategoryManagementModal from './components/CategoryManagementModal';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -32,6 +37,11 @@ const App = () => {
     rawIngredients: {},
     paperGoods: {}
   });
+  const [customCategories, setCustomCategories] = useState({
+    ingredients: [],
+    rawIngredients: [],
+    paperGoods: []
+  });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('prepped-inventory');
   const [modalOpen, setModalOpen] = useState(false);
@@ -39,6 +49,7 @@ const App = () => {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [showReorderPrintModal, setShowReorderPrintModal] = useState(false);
   const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState({
@@ -61,16 +72,43 @@ const App = () => {
     }
   }, []);
 
+  // Handle cache versioning and clearing
+  useEffect(() => {
+    // Check for app version mismatch
+    const currentVersion = process.env.REACT_APP_VERSION || Date.now().toString();
+    const storedVersion = localStorage.getItem('appVersion');
+    
+    if (storedVersion && storedVersion !== currentVersion) {
+      console.log('App version changed, clearing cache...');
+      forceDataRefresh();
+      localStorage.setItem('appVersion', currentVersion);
+    } else if (!storedVersion) {
+      localStorage.setItem('appVersion', currentVersion);
+    }
+  }, []);
+
   useEffect(() => {
     if (currentUser) {
-      Promise.all([
-        loadInventoryFromJSON(),
-        loadItemsFromJSON()
-      ]).then(([inventoryData, itemsData]) => {
-        setInventory(inventoryData);
-        setCustomItems(itemsData);
-        setLoading(false);
-      });
+      // First initialize all data files, then load the data
+      initializeAllDataFiles()
+        .then(() => {
+          return Promise.all([
+            loadInventoryFromJSON(),
+            loadItemsFromJSON(),
+            loadCategoriesFromJSON()
+          ]);
+        })
+        .then(([inventoryData, itemsData, categoriesData]) => {
+          setInventory(inventoryData);
+          setCustomItems(itemsData);
+          setCustomCategories(categoriesData);
+          setLoading(false);
+        })
+        .catch(error => {
+          console.error('Error loading data:', error);
+          showModal('Error', 'Failed to load data. Please try refreshing the page.', 'error');
+          setLoading(false);
+        });
     }
   }, [currentUser]);
 
@@ -90,6 +128,14 @@ const App = () => {
     }
   }, [customItems, loading, currentUser]);
 
+  useEffect(() => {
+    if (!loading && currentUser) {
+      saveCategoriesToJSON(customCategories).catch(error => {
+        showModal('Error', 'Failed to save categories', 'error');
+      });
+    }
+  }, [customCategories, loading, currentUser]);
+
   const handleLogin = (username) => {
     setCurrentUser(username);
     localStorage.setItem('inventoryAppUser', username);
@@ -105,6 +151,11 @@ const App = () => {
       rawIngredients: {},
       paperGoods: {}
     });
+    setCustomCategories({
+      ingredients: [],
+      rawIngredients: [],
+      paperGoods: []
+    });
   };
 
   const showModal = (title, message, type = 'info') => {
@@ -112,8 +163,22 @@ const App = () => {
     setModalOpen(true);
   };
 
+  const handleUpdateInventory = (newInventory) => {
+    setInventory(newInventory);
+  };
+
   const handleAddItem = (itemData) => {
     const { type, key, name, category, unit } = itemData;
+    
+    // Get all available categories (built-in + custom)
+    const defaultCategories = getDefaultCategoriesForType(type);
+    const customCategoriesForType = customCategories[type] || [];
+    const allAvailableCategories = [...defaultCategories, ...customCategoriesForType];
+    
+    if (!allAvailableCategories.includes(category)) {
+      showModal('Invalid Category', `The category "${category}" does not exist. Please select an existing category or create it first.`, 'error');
+      return;
+    }
     
     setCustomItems(prev => ({
       ...prev,
@@ -128,6 +193,16 @@ const App = () => {
 
   const handleUpdateItem = (itemData) => {
     const { oldKey, type, key, name, category, unit, isBuiltIn } = itemData;
+    
+    // Get all available categories (built-in + custom)
+    const defaultCategories = getDefaultCategoriesForType(type);
+    const customCategoriesForType = customCategories[type] || [];
+    const allAvailableCategories = [...defaultCategories, ...customCategoriesForType];
+    
+    if (!allAvailableCategories.includes(category)) {
+      showModal('Invalid Category', `The category "${category}" does not exist. Please select an existing category or create it first.`, 'error');
+      return;
+    }
     
     setCustomItems(prev => {
       const newItems = { ...prev };
@@ -349,9 +424,9 @@ const App = () => {
 
     const csvContent = rows.map(row => row.join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
+    const csvUrl = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
+    a.href = csvUrl;
     a.download = `prepped-inventory-${new Date().toLocaleDateString()}.csv`;
     a.click();
     showModal('Success', 'Prepped inventory has been exported to CSV', 'success');
@@ -370,9 +445,9 @@ const App = () => {
 
     const csvContent = rows.map(row => row.join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
+    const csvUrl = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
+    a.href = csvUrl;
     a.download = `raw-inventory-${new Date().toLocaleDateString()}.csv`;
     a.click();
     showModal('Success', 'Raw ingredients inventory has been exported to CSV', 'success');
@@ -399,9 +474,9 @@ const App = () => {
 
     const csvContent = rows.map(row => row.join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
+    const csvUrl = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
+    a.href = csvUrl;
     a.download = `prep-list-${new Date().toLocaleDateString()}.csv`;
     a.click();
     showModal('Success', 'Prep list has been exported to CSV', 'success');
@@ -429,7 +504,7 @@ const App = () => {
 
     const csvContent = rows.map(row => row.join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
+    const csvUrl = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.download = `reorder-list-${new Date().toLocaleDateString()}.csv`;
     a.click();
@@ -587,6 +662,25 @@ const App = () => {
           onUpdateItem={handleUpdateItem}
           editingItem={editingItem}
           activeTab={activeTab}
+          allIngredients={allIngredients}
+          allRawIngredients={allRawIngredients}
+          allPaperGoods={allPaperGoods}
+          customCategories={customCategories}
+        />
+
+        <CategoryManagementModal
+          open={showCategoryModal}
+          onOpenChange={setShowCategoryModal}
+          activeTab={activeTab}
+          allIngredients={allIngredients}
+          allRawIngredients={allRawIngredients}
+          allPaperGoods={allPaperGoods}
+          customItems={customItems}
+          onUpdateCustomItems={setCustomItems}
+          customCategories={customCategories}
+          onUpdateCustomCategories={setCustomCategories}
+          inventory={inventory}
+          onUpdateInventory={handleUpdateInventory}
         />
 
         <div className="flex justify-between items-center mb-4">
@@ -594,7 +688,7 @@ const App = () => {
             <h1 className="text-2xl font-bold text-green-800">Eleventhree Pizza</h1>
             <p className="text-sm text-gray-600">Logged in as: {currentUser}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => {
                 setEditingItem(null);
@@ -604,6 +698,27 @@ const App = () => {
             >
               <span>+</span>
               Add Item
+            </button>
+
+            <button
+              onClick={() => setShowCategoryModal(true)}
+              className="px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center gap-2"
+            >
+              <span>📁</span>
+              Manage Categories
+            </button>
+
+            <button
+              onClick={() => {
+                if (window.confirm('Clear all cached data and reload? This will not affect saved inventory.')) {
+                  clearAppCache();
+                }
+              }}
+              className="px-3 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 flex items-center gap-2"
+              title="Clear cache and reload"
+            >
+              <span>🔄</span>
+              Refresh
             </button>
             
             {activeTab === 'prepped-inventory' && (
@@ -722,10 +837,10 @@ const App = () => {
           </div>
         </div>
 
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-2 mb-4 overflow-x-auto">
           <button
             onClick={() => setActiveTab('prepped-inventory')}
-            className={`flex-1 sm:flex-none px-4 py-2 rounded-t font-medium
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-t font-medium whitespace-nowrap
               ${activeTab === 'prepped-inventory' 
                 ? 'bg-white text-green-700 border-t border-x' 
                 : 'bg-gray-100 text-gray-600'}`}
@@ -734,7 +849,7 @@ const App = () => {
           </button>
           <button
             onClick={() => setActiveTab('raw-inventory')}
-            className={`flex-1 sm:flex-none px-4 py-2 rounded-t font-medium
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-t font-medium whitespace-nowrap
               ${activeTab === 'raw-inventory' 
                 ? 'bg-white text-green-700 border-t border-x' 
                 : 'bg-gray-100 text-gray-600'}`}
@@ -743,7 +858,7 @@ const App = () => {
           </button>
           <button
             onClick={() => setActiveTab('prep')}
-            className={`flex-1 sm:flex-none px-4 py-2 rounded-t font-medium
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-t font-medium whitespace-nowrap
               ${activeTab === 'prep'
                 ? 'bg-white text-green-700 border-t border-x' 
                 : 'bg-gray-100 text-gray-600'}`}
@@ -752,7 +867,7 @@ const App = () => {
           </button>
           <button
             onClick={() => setActiveTab('reorder')}
-            className={`flex-1 sm:flex-none px-4 py-2 rounded-t font-medium
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-t font-medium whitespace-nowrap
               ${activeTab === 'reorder'
                 ? 'bg-white text-green-700 border-t border-x' 
                 : 'bg-gray-100 text-gray-600'}`}
@@ -761,7 +876,7 @@ const App = () => {
           </button>
           <button
             onClick={() => setActiveTab('paper-goods')}
-            className={`flex-1 sm:flex-none px-4 py-2 rounded-t font-medium
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-t font-medium whitespace-nowrap
               ${activeTab === 'paper-goods'
                 ? 'bg-white text-green-700 border-t border-x' 
                 : 'bg-gray-100 text-gray-600'}`}
